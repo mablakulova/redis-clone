@@ -1,13 +1,14 @@
 ﻿using System.Net.Sockets;
 using System.Net;
 using System.Text;
+using System.Collections.Concurrent;
 
 namespace redis_clone;
 
 public class Server
 {
     private TcpListener server = new TcpListener(IPAddress.Any, 6379);
-    private Dictionary<string, string> redisCache = new();
+    private ConcurrentDictionary<string, (string value, DateTime? dateTime)> redisCache = new();
 
     public void Start()
     {
@@ -67,7 +68,6 @@ public class Server
     private void HandleCommand(Socket socket, List<string> arguments)
     {
         var command = arguments[0].ToUpper();
-        string key, value;
 
         switch (command)
         {
@@ -79,26 +79,52 @@ public class Server
                 socket.Send(Encoding.ASCII.GetBytes($"+{resp}\r\n"));
                 break;
             case "SET":
-                key = arguments[1];
-                value = arguments[2];
-                redisCache[key] = value;
-                socket.Send(Encoding.ASCII.GetBytes("+OK\r\n"));
+                SetValue(socket, arguments);
                 break;
             case "GET":
-                key = arguments[1];
-                if (redisCache.ContainsKey(key))
-                {
-                    value = redisCache[key];
-                    socket.Send(Encoding.ASCII.GetBytes($"+{value}\r\n"));
-                }
-                else
-                {
-                    socket.Send(Encoding.ASCII.GetBytes("$-1\r\n"));
-                }
+                GetValue(socket, arguments);
                 break;
             default:
-                socket.Send(Encoding.ASCII.GetBytes("+UNKNOW\r\n"));
+                socket.Send(Encoding.ASCII.GetBytes("+UNKNOWN\r\n"));
                 break;
         }
+    }
+
+    private void GetValue(Socket socket, List<string> arguments)
+    {
+        var key = arguments[1];
+        if (redisCache.ContainsKey(key))
+        {
+            var value = redisCache[key];
+
+            if (value.dateTime.HasValue && DateTime.Now >= value.dateTime.Value)
+            {
+                redisCache.TryRemove(key, out _);
+                socket.Send(Encoding.ASCII.GetBytes("$-1\r\n"));
+                return;
+            }
+
+            socket.Send(Encoding.ASCII.GetBytes($"+{value.value}\r\n"));
+        }
+        else
+        {
+            socket.Send(Encoding.ASCII.GetBytes("$-1\r\n"));
+        }
+    }
+
+    private void SetValue(Socket socket, List<string> arguments)
+    {
+        var key = arguments[1];
+        var value = arguments[2];
+
+        if (arguments.Count == 5 && arguments[3].ToUpper() == "PX")
+        {
+            int expiry = int.Parse(arguments[4]);
+            redisCache.TryAdd(key, (value, DateTime.Now.AddMilliseconds(expiry)));
+        }
+
+        redisCache.TryAdd(key, (value, null));
+
+        socket.Send(Encoding.ASCII.GetBytes("+OK\r\n"));
     }
 }
