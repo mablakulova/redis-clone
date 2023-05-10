@@ -11,11 +11,21 @@ public class Server
     public void Start()
     {
         server.Start();
+        Console.WriteLine("Logs will appear here!");
 
         var socket = server.AcceptSocket();
-        byte[] response = Encoding.ASCII.GetBytes("+PONG\r\n");
-        socket.Send(response);
+        HandleClient(socket);
+    }
 
-        Console.WriteLine("Logs from your program will appear here!");
+    private static void HandleClient(Socket socket)
+    {
+        byte[] buffer = new byte[1024];
+        int bytesRead;
+
+        while ((bytesRead = socket.Receive(buffer)) > 0)
+        {
+            byte[] response = Encoding.ASCII.GetBytes("+PONG\r\n");
+            socket.Send(response);
+        }
     }
 }
