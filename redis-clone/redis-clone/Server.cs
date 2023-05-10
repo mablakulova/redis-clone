@@ -1,5 +1,6 @@
 ﻿using System.Net.Sockets;
 using System.Net;
+using System.Text;
 
 namespace redis_clone;
 
@@ -10,7 +11,10 @@ public class Server
     public void Start()
     {
         server.Start();
-        server.AcceptSocket(); // wait for client
+
+        var socket = server.AcceptSocket();
+        byte[] response = Encoding.ASCII.GetBytes("+PONG\r\n");
+        socket.Send(response);
 
         Console.WriteLine("Logs from your program will appear here!");
     }
