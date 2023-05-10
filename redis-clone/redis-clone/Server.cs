@@ -13,12 +13,16 @@ public class Server
         server.Start();
         Console.WriteLine("Logs will appear here!");
 
-        var socket = server.AcceptSocket();
-        HandleClient(socket);
+        while (true)
+        {
+            var socket = server.AcceptSocket();
+            ThreadPool.QueueUserWorkItem(HandleClient, socket);
+        }
     }
 
-    private static void HandleClient(Socket socket)
+    private void HandleClient(object? socketObject)
     {
+        var socket = (Socket)socketObject;
         byte[] buffer = new byte[1024];
         int bytesRead;
 
